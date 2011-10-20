@@ -134,6 +134,27 @@ class Litter implements \Iterator, \Countable, \ArrayAccess {
 	function replace(array $map) {
 		return $this->_asSelf(strtr($this->val, $map));
 	}
+	/**
+	 *	Truncate string to specified $length respecting encoding. If $append is
+	 *	specified that string will be appended to the end of the string if
+	 *	truncation is needed. If that is the case the resulting string will be
+	 *	$length characters long even with $append
+	 */
+	function truncate($length, $append = "") {
+		if (mb_strlen($this->val) <= $length) {
+			$out = $this->val
+		} else {
+			$out = mb_substr($this->val, 0, $length - mb_strlen($append)) . $append;
+		}
+		return $this->_asSelf($out);
+	}
+
+	/**
+	 *	Treat current value as an array and join them
+	 */
+	function join($delimiter) {
+		return $this->_asSelf(join($delimiter, iterator_to_array($this->iter)));
+	}
 
 	/**
 	 *	Print $this->val as HTML escaped string

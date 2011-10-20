@@ -5,7 +5,7 @@ namespace Litter;
  *	underlying objects. It's intended use is a full fledged template engine. Note that
  *	no methods edit the value in place.
  */
-class Litter implements \Iterator, \Countable, \ArrayAccess {
+class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	private
 		/** Holds original creation time value */
 		$val,
@@ -91,10 +91,24 @@ class Litter implements \Iterator, \Countable, \ArrayAccess {
 	}
 
 	/**
+	 *	Print $this->val as HTML escaped string
+	 */
+	function __toString() {
+		return htmlentities(is_array($this->val) && count($this->val) === 1 ?
+			reset($this->val) : $this->val, NULL, $this->encoding);
+	}
+
+	/**
 	 *	Current zerobound iteration index
 	 */
 	function index() {
 		return $this->index;
+	}
+	/**
+	 *	Alias for ->count()
+	 */
+	function length() {
+		return $this->count();
 	}
 
 	/**
@@ -153,15 +167,9 @@ class Litter implements \Iterator, \Countable, \ArrayAccess {
 	 *	Treat current value as an array and join them
 	 */
 	function join($delimiter) {
-		return $this->_asSelf(join($delimiter, iterator_to_array($this->iter)));
+		return $this->_asSelf(join($delimiter, iterator_to_array($this)));
 	}
 
-	/**
-	 *	Print $this->val as HTML escaped string
-	 */
-	function __toString() {
-		return htmlentities($this->val, NULL, $this->encoding);
-	}
 	/**
 	 *	Raw value of $this->val
 	 */
@@ -174,6 +182,14 @@ class Litter implements \Iterator, \Countable, \ArrayAccess {
 	 */
 	function slice($offset = 0, $count = -1) {
 		return $this->_asSelf(new LimitIterator($this, $offset, $count), $this->parent);
+	}
+
+	/**
+	 *	Produce an iterator of self that gives a new iteretor with the length of
+	 *	$size each time it's iterated
+	 */
+	function group($size) {
+		return $this->_asSelf(new GroupIterator($this, $size));
 	}
 
 	// Block inheritance
@@ -300,6 +316,11 @@ class Litter implements \Iterator, \Countable, \ArrayAccess {
 	// Countable
 	function count() {
 		return $this->iterator->count();
+	}
+
+	// Implement outer iterator properties
+	function getInnerIterator() {
+		return $this->iterator;
 	}
 
 	// Implement iterator properties

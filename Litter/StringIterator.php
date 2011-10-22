@@ -6,8 +6,16 @@ namespace Litter;
  */
 class StringIterator implements \Iterator, \Countable {
 	private $str, $i = 0, $encoding;
-	function __construct($str, $encoding) {
+	function __construct($str, $encoding = "auto") {
+		if (!is_string($str)) {
+			throw new \InvalidArgumentException("\$str is not string");
+		}
+		if (!in_array($encoding, mb_list_encodings())) {
+			throw new \InvalidArgumentException("$encoding is not a known encoding");
+		}
 		$this->str = $str;
+
+
 		$this->encoding = $encoding;
 	}
 

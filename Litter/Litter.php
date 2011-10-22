@@ -156,7 +156,7 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	 */
 	function truncate($length, $append = "") {
 		if (mb_strlen($this->val) <= $length) {
-			$out = $this->val
+			$out = $this->val;
 		} else {
 			$out = mb_substr($this->val, 0, $length - mb_strlen($append)) . $append;
 		}
@@ -313,6 +313,13 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 		return $this;
 	}
 
+	/**
+	 *	Converts $php_string to a string suitable for direct use with ->extending()
+	 */
+	static function stringSource($php_string) {
+		return "data:text/plain;base64," . base64_encode($php_string);
+	}
+
 	// Countable
 	function count() {
 		return $this->iterator->count();
@@ -363,11 +370,11 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	function offsetExists($offset) {
 		throw new NotImplementedException;
 	}
-    function offsetSet($offset, $value) {
-	    throw new ReadOnlyException;
+	function offsetSet($offset, $value) {
+		throw new ReadOnlyException;
 	}
-    function offsetUnset($offset) {
-	    throw new ReadOnlyException;
+	function offsetUnset($offset) {
+		throw new ReadOnlyException;
 	}
 
 	// Magic methods

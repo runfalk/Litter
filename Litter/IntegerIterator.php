@@ -17,7 +17,7 @@ class IntegerIterator implements \Iterator, \Countable {
 	 */
 	function __construct($n) {
 		if (!is_int($n)) {
-			new InvalidArgumentException(sprintf("\$n must be integer %s given", gettype($n)));
+			throw new \InvalidArgumentException(sprintf("\$n must be integer %s given", gettype($n)));
 		}
 		$this->n = $n;
 	}

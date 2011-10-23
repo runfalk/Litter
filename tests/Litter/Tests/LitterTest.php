@@ -9,6 +9,17 @@ class LitterTest extends \PHPUnit_Framework_TestCase {
 		$l = new Litter($array);
 		$this->assertEquals($array, array_map("strval", iterator_to_array($l)));
 	}
+	function testTraversableIteration() {
+		$dom = simplexml_load_string('
+			<root>
+				<child>value1</child>
+				<child>value2</child>
+			</root>');
+		$l = new Litter($dom->child);
+		$this->assertEquals(
+			array("value1", "value2"),
+			array_map("strval", iterator_to_array($l, FALSE)));
+	}
 	function testStdClassIteration() {
 		$array = array("foo" => "bar", "baz" => "buz");
 		$l = new Litter((object)$array);

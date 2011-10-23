@@ -8,9 +8,9 @@ namespace Litter;
 class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	private
 		/** Holds original creation time value */
-		$val,
+		$value,
 
-		/** Iterator if available for data type of $this->val */
+		/** Iterator if available for data type of $this->value */
 		$iterator,
 
 		/** Array of type to Iterator class mappings */
@@ -27,6 +27,9 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 
 		/** Remembers which source file we're currently extending, for template inheritance */
 		$extending = NULL,
+
+		/** Keep track of which level of extending that's currently active, for template inheritance */
+		$extending_level = 0,
 
 		/** Keeps track of currently open blocks. Used for template inheritance */
 		$current_blocks = array(),
@@ -55,54 +58,38 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 		}
 		$this->encoding = $encoding;
 		$this->parent   = $parent;
-
-		$this->val = $value;
-		if ($value instanceof Traversable) {
-			$this->iterator = new IteratorIterator($value);
-		} elseif (is_string($value)) {
-			$iter = $this->iterators["string"];
-			$this->iterator = new $iter($value, $this->encoding);
-		} elseif (is_int($value)) {
-			$iter = $this->iterators["integer"];
-			$this->iterator = new $iter($value);
-		} elseif (is_array($value)) {
-			$iter = $this->iterators["array"];
-			$this->iterator = new $iter($value);
-		} else {
-			foreach ($this->iterators as $obj => $iter) {
-				if ($value instanceof $obj) {
-					$this->iterator = new $iter($value);
-				}
-			}
-		}
+		$this->value    = $value;
 	}
 	/**
 	 *	Create a new instance with $value as value and $parent as parent
 	 */
 	private function _asSelf($value, $parent = NULL) {
-		return new self($value, $this->iterators, $this->encoding, $parent);
+		return new self(
+			$value, $this->iterators, $this->encoding, $parent === NULL ? $this->parent : $parent);
 	}
 
 	/**
 	 *	Same as ->_asSelf with $parent = NULL
 	 */
 	function __clone() {
-		return $this->_asSelf($this->val);
+		return $this->_asSelf($this->value);
 	}
 
 	/**
-	 *	Print $this->val as HTML escaped string
+	 *	Print $this->value as HTML escaped string
 	 */
 	function __toString() {
-		return htmlentities(is_array($this->val) && count($this->val) === 1 ?
-			reset($this->val) : $this->val, NULL, $this->encoding);
+		return $this->encode("HTML-ENTITIES")->raw();
 	}
 
 	/**
-	 *	Current zerobound iteration index
+	 *	Current onebound iteration index unless argument is true
 	 */
-	function index() {
-		return $this->index;
+	function index($zerobound = FALSE) {
+		if (!isset($this->parent)) {
+			throw new Exception("Not currently iterating");
+		}
+		return $this->_asSelf($this->parent->index + (1 - (int)(bool)$zerobound));
 	}
 	/**
 	 *	Alias for ->count()
@@ -123,7 +110,6 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	 */
 	function cycle(array $cycle) {
 		if (!isset($this->parent)) {
-			var_dump($this);
 			throw new Exception("Nothing to cycle");
 		}
 		return $this->_asSelf($cycle[$this->parent->index % count($cycle)], $this->parent);
@@ -131,22 +117,39 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 
 	// String manipulation
 	/**
+	 *
+	 */
+	function encode($encoding) {
+		if (!in_array($encoding, mb_list_encodings())) {
+			throw new \InvalidArgumentException("$encoding is not a known encoding");
+		}
+		list($internal_encoding, $val) = $this->encoding == "HTML-ENTITIES" ?
+			array("UTF-8", html_entity_decode($this->value, ENT_COMPAT, "UTF-8")) :
+			array($this->encoding, $this->value);
+
+		$reencoded = $this->_asSelf($encoding == "HTML-ENTITIES" ?
+			htmlentities($val, ENT_COMPAT, $internal_encoding) :
+			mb_convert_encoding($val, $encoding, $internal_encoding));
+		$reencoded->encoding = $encoding;
+		return $reencoded;
+	}
+	/**
 	 *	Treat current value as string and uppercase it
 	 */
 	function upper() {
-		return $this->_asSelf(mb_convert_case($this->val, MB_CASE_UPPER, $this->encoding));
+		return $this->_asSelf(mb_convert_case($this->value, MB_CASE_UPPER, $this->encoding));
 	}
 	/**
 	 *	Treat current value as string and lowercase it
 	 */
 	function lower() {
-		return $this->_asSelf(mb_convert_case($this->val, MB_CASE_LOWER, $this->encoding));
+		return $this->_asSelf(mb_convert_case($this->value, MB_CASE_LOWER, $this->encoding));
 	}
 	/**
 	 *	Replace occurences of keys with values
 	 */
 	function replace(array $map) {
-		return $this->_asSelf(strtr($this->val, $map));
+		return $this->_asSelf(strtr($this->value, $map));
 	}
 	/**
 	 *	Truncate string to specified $length respecting encoding. If $append is
@@ -155,10 +158,10 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	 *	$length characters long even with $append
 	 */
 	function truncate($length, $append = "") {
-		if (mb_strlen($this->val) <= $length) {
-			$out = $this->val;
+		if (mb_strlen($this->value) <= $length) {
+			$out = $this->value;
 		} else {
-			$out = mb_substr($this->val, 0, $length - mb_strlen($append)) . $append;
+			$out = mb_substr($this->value, 0, $length - mb_strlen($append)) . $append;
 		}
 		return $this->_asSelf($out);
 	}
@@ -167,21 +170,21 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	 *	Treat current value as an array and join them
 	 */
 	function join($delimiter) {
-		return $this->_asSelf(join($delimiter, iterator_to_array($this)));
+		return $this->_asSelf(join($delimiter, iterator_to_array($this, FALSE)));
 	}
 
 	/**
-	 *	Raw value of $this->val
+	 *	Raw value of $this->value
 	 */
 	function raw() {
-		return $this->val;
+		return $this->value;
 	}
 
 	/**
 	 *	Return new instance of Litter with current iterator wrapped in a LimitIterator
 	 */
 	function slice($offset = 0, $count = -1) {
-		return $this->_asSelf(new LimitIterator($this, $offset, $count), $this->parent);
+		return $this->_asSelf(new \LimitIterator($this, $offset, $count), $this->parent);
 	}
 
 	/**
@@ -230,9 +233,12 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 		$src = $this->extending;
 		$this->extending = NULL;
 
+
 		// Make $this available as $l for included file
+		$this->extending_level++;
 		$l = $this;
 		require $src;
+		$this->extending_level--;
 
 		return $this;
 	}
@@ -241,11 +247,20 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 	 *	until ->end() is called. Blocks can only be nested in the topmost template.
 	 */
 	function block($name) {
+		if ($this->current_blocks && $this->extending) {
+			throw new Exception("Blocks can't be nested when extending");
+		}
+
 		// Start buffering upcoming output
 		ob_start();
 
 		// Track this block
 		$this->current_blocks[] = $name;
+
+		// Make sure there's an array to save block output to
+		if (!isset($this->block_data[$name])) {
+			$this->block_data[$name] = array();
+		}
 
 		return $this;
 	}
@@ -260,31 +275,42 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 		// Get current block
 		$block = array_pop($this->current_blocks);
 
-		if ($this->current_blocks && $this->extending) {
-			throw new Exception("Blocks can't be nested when extending");
-		}
-
 		if ($this->extending) {
 			// If we haven't set this block higher up in the inheritance tree we'll do it now
-			if (!isset($this->block_data)) {
-				$this->block_data[$block] = ob_get_clean();
+			if (!isset($this->block_data[$block][$this->extending_level])) {
+				$this->block_data[$block][$this->extending_level] = ob_get_clean();
 			// We still want to save this if super has been called once for this block
-			} elseif (count($this->block_data[$block]) === 1) {
-				$this->block_data[$block][] = ob_get_clean();
+			} elseif (
+				is_array($this->block_data[$block]) &&
+				is_array($this->block_data[$block][$this->extending_level]) &&
+				count($this->block_data[$block][$this->extending_level]) === 1)
+			{
+				$this->block_data[$block][$this->extending_level][] = ob_get_clean();
 			}
 		} else {
-			// If a block was set on a higher level we want to use it
-			if (isset($this->block_data[$block])) {
-				// Get current output buffer
-				$current_block = ob_get_clean();
-				if (is_array($this->block_data[$block])) {
-					echo join($current_block, $this->block_data[$block]);
-				} else {
-					echo $this->block_data[$block];
+			// Get current output buffer and save in our block data array
+			$this->block_data[$block][$this->extending_level] = ob_get_clean();
+
+			// Are parents relevant at all? (Did topmost block call super()?)
+			if (is_array(reset($this->block_data[$block]))) {
+				// Fill $out with a "fake" extending child with no content of its own
+				$out = array("", "");
+
+				foreach ($this->block_data[$block] as $saved_block) {
+					// Does the current saved block care about its parents?
+					if (!is_array($saved_block)) {
+						// Here $saved_block is string which means further iteration
+						// is pointless, hence we echo what we've got and break the loop
+						echo join($saved_block, $out);
+						break;
+					} else {
+						// Merge parent block to current
+						$out[0] .= $saved_block[0];
+						$out[1] = $saved_block[1] . $out[1];
+					}
 				}
 			} else {
-				// Here we know we're in the base template so flushing is safe
-				ob_end_flush();
+				echo reset($this->block_data[$block]);
 			}
 		}
 		return $this;
@@ -298,14 +324,19 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 			throw new Exception("Super must be called within a block");
 		} elseif (!$this->extending) {
 			throw new Exception("Super can't be called when not extending");
-		} elseif (
-			isset($this->block_data[end($this->current_blocks)]) &&
-			count($this->block_data[end($this->current_blocks)]) > 1)
+		}
+
+		$block = end($this->current_blocks);
+
+		if (
+			isset($this->block_data[$block][$this->extending_level]) &&
+			is_array($this->block_data[$block][$this->extending_level]) &&
+			count($this->block_data[$block][$this->extending_level]))
 		{
 			throw new Exception("Super can only be called once per block");
 		}
 		// Turn the buffering into an array
-		$this->block_data[end($this->current_blocks)] = array(ob_get_clean());
+		$this->block_data[$block][$this->extending_level] = array(ob_get_clean());
 
 		// Restart output buffering
 		ob_start();
@@ -320,27 +351,54 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 		return "data:text/plain;base64," . base64_encode($php_string);
 	}
 
-	// Countable
-	function count() {
-		return $this->iterator->count();
+	// Implement outer iterator properties
+	/**
+	 *	Try to make an iterator out of current value
+	 */
+	function getInnerIterator() {
+		// Is iterator not yet gotten?
+		if (!isset($this->iterator)) {
+			if ($this->value instanceof \Iterator) {
+				$this->iterator = $this->value;
+			} elseif ($this->value instanceof \Traversable) {
+				$this->iterator = new \IteratorIterator($this->value);
+			} elseif (is_string($this->value)) {
+				$iter = $this->iterators["string"];
+				$this->iterator = new $iter($this->value, $this->encoding);
+			} elseif (is_int($this->value)) {
+				$iter = $this->iterators["integer"];
+				$this->iterator = new $iter($this->value);
+			} elseif (is_array($this->value)) {
+				$iter = $this->iterators["array"];
+				$this->iterator = new $iter($this->value);
+			} else {
+				foreach ($this->iterators as $obj => $iter) {
+					if ($this->value instanceof $obj) {
+						$this->iterator = new $iter($this->value);
+					}
+				}
+			}
+
+			// If $this->iterator is still not set value is considered intraversable
+			if (!isset($this->iterator)) {
+				throw new Exception(sprintf(
+					"Can't iterate current value, type is intraversable (%s)",
+					is_object($this->value) ? get_class($this->value) : gettype($this->value)));
+			}
+		}
+
+		return $this->iterator;
 	}
 
-	// Implement outer iterator properties
-	function getInnerIterator() {
-		return $this->iterator;
+	// Countable
+	function count() {
+		return $this->getInnerIterator()->count();
 	}
 
 	// Implement iterator properties
 	function rewind() {
 		$this->index = 0;
-
-		if (!isset($this->iterator)) {
-			throw new Exception(sprintf(
-				"Can't iterate current value, type is intraversable (%s)",
-				is_object($this->iterator) ? get_class($this->iterator) : gettype($this->iterator)));
-		}
-
-		$this->iterator->rewind();
+		$this->getInnerIterator()->rewind();
 	}
 	function current() {
 		return $this->_asSelf($this->iterator->current(), $this);
@@ -358,17 +416,36 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 
 	// Implement ArrayAccess
 	function offsetGet($offset) {
-		if (is_array($this->val)) {
-			return new self($this->val[$offset], $this->iterators);
-		} elseif (is_object($this->val)) {
-			return new self($this->val->{$offset}, $this->iterators);
-		} elseif (is_string($this->val)) {
-			return new self(mb_substr($this->val, $offset, 1, $this->encoding), $this->iterators);
+		if (is_array($this->value)) {
+			return $this->_asSelf($this->value[$offset]);
+		} elseif (is_object($this->value)) {
+			return $this->_asSelf($this->value->{$offset});
+		} elseif (is_string($this->value)) {
+			if (!is_int($offset)) {
+				throw new \InvalidArgumentException(
+					"Non integer offsets are not supported for string values");
+			}
+			return $this->_asSelf(mb_substr($this->value, $offset, 1, $this->encoding));
 		}
-		throw new NotImplementedException;
+		throw new NotImplementedException(sprintf(
+			"Getting by offset is not supported for the current type of value (%s)",
+			is_object($this->value) ? get_class($this->value) : gettype($this->value)));
 	}
 	function offsetExists($offset) {
-		throw new NotImplementedException;
+		if (is_array($this->value)) {
+			return isset($this->value[$offset]);
+		} elseif (is_object($this->value)) {
+			return isset($this->value->{$offset});
+		} elseif (is_string($this->value)) {
+			if (!is_int($offset)) {
+				throw new \InvalidArgumentException(
+					"Non integer offsets are not supported for string values");
+			}
+			return $offset < $this->count();
+		}
+		throw new NotImplementedException(sprintf(
+			"isset() is not supported for the current type of value (%s)",
+			is_object($this->value) ? get_class($this->value) : gettype($this->value)));
 	}
 	function offsetSet($offset, $value) {
 		throw new ReadOnlyException;
@@ -382,7 +459,7 @@ class Litter implements \OuterIterator, \Countable, \ArrayAccess {
 		return $this->offsetGet($k);
 	}
 	function __set($k, $v) {
-		return $this->offsetSet($k);
+		return $this->offsetSet($k, $v);
 	}
 	function __isset($k) {
 		return $this->offsetExists($k);

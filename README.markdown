@@ -8,6 +8,21 @@ Requirements
 ------------
 Litter requires PHP >= 5.3.0 and is actively tested with 5.3.3.
 
+Installation
+------------
+Installation is preferably done through PEAR.
+
+	pear channel-discover pear.runfalk.se
+	pear install runfalk/Litter-alpha
+
+Remember that this is alpha software and is expected to be unstable. The API may change.
+
+After being installed including using the autoloader is the easiest way.
+
+```php
+<?php require_once "Litter/Autoloader.php"; ?>
+```
+
 Tests
 -----
 Litter is covered by a [PHPUnit](https://github.com/sebastianbergmann/phpunit) test suite.

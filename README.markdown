@@ -17,13 +17,13 @@ Examples
 ### String
 Strings are one of many iterable things when it comes to Litter.
 
-	```php
-	<ul>
-	<?php foreach (new Litter("foo") as $c): ?>
-		<li><?=$c?></li>
-	<?php endforeach; ?>
-	</ul>
-	```
+```php
+<ul>
+<?php foreach (new Litter("foo") as $c): ?>
+	<li><?=$c?></li>
+<?php endforeach; ?>
+</ul>
+```
 
 The output is the list
 

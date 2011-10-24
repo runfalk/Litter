@@ -16,6 +16,7 @@ Examples
 --------
 ### String
 Strings are one of many iterable things when it comes to Litter.
+
 	```php
 	<ul>
 	<?php foreach (new Litter("foo") as $c): ?>
@@ -34,11 +35,13 @@ Litter will always try to treat the value as an iterator. Note that $c in the lo
 
 ### Basic inheritance
 *	base.php
+
 	```php
 	foo<?php $l->block("baz"); ?>bar<?php $l->end(); ?>
 	```
 
 *	template.php
+
 	```php
 	<?php $l = new Litter; ?>
 	<?php $l->extending("base.php"); ?>
@@ -50,10 +53,13 @@ The output in this case will be `foobuz` since the extending _template.php_ over
 
 ### Basic inheritance with parent
 *	base.php
+
 	```php
 	foo<?php $l->block("baz"); ?>bar<?php $l->end(); ?>
 	```
+
 *	template.php
+
 	```php
 	<?php $l = new Litter; ?>
 	<?php $l->extending("base.php"); ?>
